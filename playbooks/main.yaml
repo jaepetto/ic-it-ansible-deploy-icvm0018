@@ -1,0 +1,49 @@
+- name: Install server and configure it
+  hosts: all
+  become: true
+  roles:
+    - role: fail2ban
+
+    - role: geerlingguy.ntp
+      vars:
+        ntp_enabled: true
+        ntp_timezone: Europe/Zurich
+        ntp_area: 'ch'
+
+    - role: geerlingguy.firewall
+      vars:
+        firewall_allowed_tcp_ports:
+          - '22' # SSH
+          - '9100' # node_exporter
+
+    - role: deploy_ic_it_ssh_keys
+
+    - role: geerlingguy.node_exporter
+      vars:
+        node_exporter_host: '0.0.0.0'
+        node_exporter_port: 9100
+
+    - role: jaepetto.ansible_mount_cifs_volume
+      vars:
+        cifs_volume: '//ic1files.epfl.ch/D-VET'
+        mount_point: '/mnt/ic1files_epfl_ch_D-VET'
+        creds_uuid: 'dvetcifspwd'
+        fstab_options: 'user,uid=905905,gid=11154,file_mode=0640,dir_mode=0750,rw,suid,vers=3.0,credentials=/etc/{{ creds_uuid }}'
+        username: "{{ lookup('ansible.builtin.env', 'CIFS_USER') }}"
+        password: "{{ lookup('ansible.builtin.env', 'CIFS_PASSWORD') }}"
+        domain: 'INTRANET'
+        state: 'mounted'
+
+  tasks:
+    - name: Make sure that the nfs-common package is installed
+      ansible.builtin.apt:
+        name: nfs-common
+        state: present
+
+    - name: Mount the NFS volume
+      ansible.posix.mount.mount:
+        path: /mnt/ic1files_epfl_ch_u13722_ic_ml4ed_001_files_nfs
+        src: ic1files.epfl.ch:/u13722_ic_ml4ed_001_files_nfs
+        fstype: nfs
+        opts: defaults
+        state: mounted
